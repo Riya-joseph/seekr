@@ -11,12 +11,11 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 
 def configure_logging(
     verbose: bool = False,
-    log_file: Optional[Path] = None,
+    log_file: Path | None = None,
 ) -> None:
     """
     Configure the root "seekr" logger.
@@ -47,7 +46,7 @@ def configure_logging(
     else:
         # Interactive mode: use Rich for pretty terminal output when available
         try:
-            from rich.logging import RichHandler  # noqa: PLC0415
+            from rich.logging import RichHandler
 
             rich_handler = RichHandler(
                 rich_tracebacks=True,

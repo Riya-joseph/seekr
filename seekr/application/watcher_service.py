@@ -11,12 +11,12 @@ from __future__ import annotations
 import logging
 import signal
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
+from seekr.application.index_service import IndexService
 from seekr.domain.exceptions import WatcherError
 from seekr.domain.interfaces import FileWatcher
-from seekr.application.index_service import IndexService
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,8 @@ class WatcherService:
         self,
         file_watcher: FileWatcher,
         index_service: IndexService,
-        on_event: Optional[Callable[[str, Path], None]] = None,
-        ignore_patterns: Optional[set] = None,
+        on_event: Callable[[str, Path], None] | None = None,
+        ignore_patterns: set[str] | None = None,
     ) -> None:
         """
         Args:
@@ -50,7 +50,7 @@ class WatcherService:
         self._watcher = file_watcher
         self._index_service = index_service
         self._on_event = on_event
-        self._ignore_patterns: set = ignore_patterns or set()
+        self._ignore_patterns: set[str] = ignore_patterns or set()
         self._running = False
 
     def start(self, paths: list[Path], blocking: bool = True) -> None:
@@ -92,7 +92,8 @@ class WatcherService:
     def _path_ignored(self, path: Path) -> bool:
         if not self._ignore_patterns:
             return False
-        from seekr.domain.patterns import is_ignored  # noqa: PLC0415
+        from seekr.domain.patterns import is_ignored
+
         return is_ignored(path, self._ignore_patterns)
 
     def _handle_created(self, path: Path) -> None:
@@ -103,7 +104,7 @@ class WatcherService:
         self._emit("created", path)
         try:
             self._index_service.index_file(path)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("Failed to index created file %s: %s", path, exc)
 
     def _handle_modified(self, path: Path) -> None:
@@ -114,7 +115,7 @@ class WatcherService:
         self._emit("modified", path)
         try:
             self._index_service.index_file(path)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("Failed to re-index modified file %s: %s", path, exc)
 
     def _handle_deleted(self, path: Path) -> None:
@@ -125,14 +126,14 @@ class WatcherService:
         self._emit("deleted", path)
         try:
             self._index_service.remove_file(path)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("Failed to remove deleted file %s: %s", path, exc)
 
     def _emit(self, event_type: str, path: Path) -> None:
         if self._on_event:
             try:
                 self._on_event(event_type, path)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass  # callbacks must never break the watcher loop
 
     def _block_until_signal(self) -> None:

@@ -50,8 +50,4 @@ def is_ignored(path: Path, patterns: set[str]) -> bool:
 
     See :func:`matches_pattern` for the supported pattern types.
     """
-    return any(
-        matches_pattern(part, pattern)
-        for part in path.parts
-        for pattern in patterns
-    )
+    return any(matches_pattern(part, pattern) for part in path.parts for pattern in patterns)

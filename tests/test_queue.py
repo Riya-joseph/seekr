@@ -10,18 +10,17 @@ The queue drives background indexing. These tests verify that:
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest
 
+from seekr.domain.entities import TaskStatus
 from seekr.infrastructure.queue.index_queue import SQLiteIndexQueue
-from seekr.domain.entities import QueueStats, TaskStatus
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def tmp_db(tmp_path: Path) -> Path:
@@ -36,6 +35,7 @@ def queue(tmp_db: Path) -> SQLiteIndexQueue:
 # ---------------------------------------------------------------------------
 # Enqueue
 # ---------------------------------------------------------------------------
+
 
 class TestEnqueue:
     def test_enqueue_returns_positive_task_id(self, queue: SQLiteIndexQueue) -> None:
@@ -66,6 +66,7 @@ class TestEnqueue:
 # ---------------------------------------------------------------------------
 # Status transitions
 # ---------------------------------------------------------------------------
+
 
 class TestStatusTransitions:
     def test_mark_processing(self, queue: SQLiteIndexQueue) -> None:
@@ -98,6 +99,7 @@ class TestStatusTransitions:
 # Statistics
 # ---------------------------------------------------------------------------
 
+
 class TestQueueStats:
     def test_empty_queue_stats(self, queue: SQLiteIndexQueue) -> None:
         stats = queue.get_stats()
@@ -121,7 +123,7 @@ class TestQueueStats:
     def test_total_is_sum_of_all_statuses(self, queue: SQLiteIndexQueue) -> None:
         t1 = queue.enqueue_file("/a.py", "h1")
         t2 = queue.enqueue_file("/b.py", "h2")
-        t3 = queue.enqueue_file("/c.py", "h3")
+        _ = queue.enqueue_file("/c.py", "h3")
         queue.mark_processing(t1)
         queue.mark_done(t1)
         queue.mark_processing(t2)
@@ -136,6 +138,7 @@ class TestQueueStats:
 # ---------------------------------------------------------------------------
 # Persistence
 # ---------------------------------------------------------------------------
+
 
 class TestQueuePersistence:
     def test_tasks_survive_queue_reinstantiation(self, tmp_db: Path) -> None:

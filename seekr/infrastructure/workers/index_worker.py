@@ -15,7 +15,7 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from seekr.config.settings import NUM_INDEX_WORKERS
 
@@ -31,8 +31,8 @@ _POLL_INTERVAL: float = 0.5  # seconds between queue checks when idle
 def run_worker(
     queue: IndexQueue,
     index_service: IndexService,
-    stop_event: Optional[threading.Event] = None,
-    ignore_patterns: Optional[set[str]] = None,
+    stop_event: threading.Event | None = None,
+    ignore_patterns: set[str] | None = None,
 ) -> None:
     """
     Run a single worker loop.
@@ -85,9 +85,9 @@ def run_worker_pool(
     index_service: IndexService,
     num_workers: int = NUM_INDEX_WORKERS,
     daemon: bool = True,
-    stop_event: Optional[threading.Event] = None,
-    ignore_patterns: Optional[set[str]] = None,
-) -> Optional[list[threading.Thread]]:
+    stop_event: threading.Event | None = None,
+    ignore_patterns: set[str] | None = None,
+) -> list[threading.Thread] | None:
     """
     Start a pool of worker threads.
 

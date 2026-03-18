@@ -23,9 +23,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Optional
-
-import numpy as np
+from typing import Any
 
 from seekr.domain.exceptions import ModelError
 from seekr.domain.interfaces import EmbeddingModel
@@ -49,13 +47,13 @@ class CLIPEmbedder(EmbeddingModel):
         self,
         model_name: str = _CLIP_MODEL,
         device: str = "cpu",
-        cache_dir: Optional[Path] = None,
+        cache_dir: Path | None = None,
     ) -> None:
         self._model_name = model_name
         self._device = device
         self._cache_dir = str(Path(cache_dir).expanduser().resolve()) if cache_dir else None
-        self._model: Optional[object] = None
-        self._processor: Optional[object] = None
+        self._model: Any = None
+        self._processor: Any = None
 
     # ------------------------------------------------------------------
     # EmbeddingModel interface
@@ -79,7 +77,7 @@ class CLIPEmbedder(EmbeddingModel):
             return []
         model, processor = self._get_model()
         try:
-            import torch  # noqa: PLC0415
+            import torch
 
             inputs = processor(text=texts, return_tensors="pt", padding=True, truncation=True)
             inputs = {k: v.to(self._device) for k, v in inputs.items()}
@@ -87,7 +85,7 @@ class CLIPEmbedder(EmbeddingModel):
                 out = model.get_text_features(**inputs)
                 features = self._features_tensor(out)
                 features = features / features.norm(dim=-1, keepdim=True)
-            return features.cpu().numpy().tolist()
+            return features.cpu().numpy().tolist()  # type: ignore[no-any-return]
         except Exception as exc:
             raise ModelError(f"CLIP text embedding failed: {exc}") from exc
 
@@ -105,8 +103,8 @@ class CLIPEmbedder(EmbeddingModel):
             return []
         model, processor = self._get_model()
         try:
-            import torch  # noqa: PLC0415
-            from PIL import Image  # noqa: PLC0415
+            import torch
+            from PIL import Image
 
             images = [Image.open(p).convert("RGB") for p in image_paths]
             inputs = processor(images=images, return_tensors="pt")
@@ -115,7 +113,7 @@ class CLIPEmbedder(EmbeddingModel):
                 out = model.get_image_features(**inputs)
                 features = self._features_tensor(out)
                 features = features / features.norm(dim=-1, keepdim=True)
-            return features.cpu().numpy().tolist()
+            return features.cpu().numpy().tolist()  # type: ignore[no-any-return]
         except Exception as exc:
             raise ModelError(f"CLIP image embedding failed: {exc}") from exc
 
@@ -124,9 +122,10 @@ class CLIPEmbedder(EmbeddingModel):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _features_tensor(out: object) -> object:
+    def _features_tensor(out: Any) -> Any:
         """Get embedding tensor from CLIP output (handles tensor or BaseModelOutputWithPooling)."""
-        import torch  # noqa: PLC0415
+        import torch
+
         if isinstance(out, torch.Tensor):
             return out
         if hasattr(out, "pooler_output") and out.pooler_output is not None:
@@ -135,21 +134,21 @@ class CLIPEmbedder(EmbeddingModel):
             return out.last_hidden_state
         raise ModelError(f"Unexpected CLIP output type: {type(out)}")
 
-    def _get_model(self) -> tuple[object, object]:
+    def _get_model(self) -> tuple[Any, Any]:
         if self._model is None:
             logger.debug("Loading CLIP model: %s", self._model_name)
             # Check all required packages upfront so the error message is accurate.
             missing = []
             try:
-                import torch  # noqa: F401, PLC0415
+                import torch  # noqa: F401
             except ImportError:
                 missing.append("torch")
             try:
-                import transformers  # noqa: F401, PLC0415
+                import transformers  # noqa: F401
             except ImportError:
                 missing.append("transformers")
             try:
-                import PIL  # noqa: F401, PLC0415
+                import PIL  # noqa: F401
             except ImportError:
                 missing.append("Pillow")
             if missing:
@@ -166,22 +165,21 @@ class CLIPEmbedder(EmbeddingModel):
                 _tqdm_disable = os.environ.get("TQDM_DISABLE")
                 os.environ["TQDM_DISABLE"] = "1"
                 try:
-                    from transformers import CLIPModel, CLIPProcessor  # noqa: PLC0415
-                    import transformers as _tf  # noqa: PLC0415
+                    import transformers as _tf
+                    from transformers import CLIPModel, CLIPProcessor
 
-                    _tf.logging.set_verbosity_error()
+                    _tf.logging.set_verbosity_error()  # type: ignore[no-untyped-call]
                     if hasattr(_tf.utils.logging, "disable_progress_bar"):
-                        _tf.utils.logging.disable_progress_bar()
+                        _tf.utils.logging.disable_progress_bar()  # type: ignore[no-untyped-call]
                     else:
-                        _tf.logging.disable_progress_bar()
+                        _tf.logging.disable_progress_bar()  # type: ignore[no-untyped-call]
                     logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
                     self._processor = CLIPProcessor.from_pretrained(
                         self._model_name, cache_dir=self._cache_dir
                     )
-                    self._model = CLIPModel.from_pretrained(
-                        self._model_name, cache_dir=self._cache_dir
-                    ).to(self._device)
+                    _clip = CLIPModel.from_pretrained(self._model_name, cache_dir=self._cache_dir)
+                    self._model = _clip.to(self._device)  # type: ignore[arg-type]
                     self._model.eval()
                     logger.debug("CLIP model loaded (dim=%d, device=%s)", _CLIP_DIM, self._device)
                 finally:

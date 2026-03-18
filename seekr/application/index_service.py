@@ -18,15 +18,13 @@ import hashlib
 import logging
 import math
 import os
-import time
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional, Sequence
 
 from seekr.config.settings import MAX_CHARS_PER_FILE, MAX_CHUNKS_PER_FILE
 from seekr.domain.entities import FileChunk, FileRecord, FileType, IndexStatus
 from seekr.domain.exceptions import IndexingError, ParseError
-from seekr.domain.patterns import is_ignored as _is_path_ignored_by_pattern, matches_pattern
 from seekr.domain.interfaces import (
     EmbeddingModel,
     FileParser,
@@ -34,6 +32,8 @@ from seekr.domain.interfaces import (
     MetadataStore,
     VectorStore,
 )
+from seekr.domain.patterns import is_ignored as _is_path_ignored_by_pattern
+from seekr.domain.patterns import matches_pattern
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +42,15 @@ _MAX_BATCH_VECTORS = 64
 
 # Always skip these when indexing a directory, even if no ignore_patterns are passed.
 # Prevents accidentally indexing whole machine or pulling in deps by default.
-_MINIMUM_IGNORE: frozenset[str] = frozenset({
-    ".git",
-    "node_modules",
-    "__pycache__",
-    ".venv",
-    "venv",
-})
-
+_MINIMUM_IGNORE: frozenset[str] = frozenset(
+    {
+        ".git",
+        "node_modules",
+        "__pycache__",
+        ".venv",
+        "venv",
+    }
+)
 
 
 def _sha256(path: Path) -> str:
@@ -79,9 +80,9 @@ class IndexService:
         image_embedder: EmbeddingModel,
         vector_store: VectorStore,
         metadata_store: MetadataStore,
-        progress_callback: Optional[Callable[[str, int, int], None]] = None,
-        image_vector_store: Optional[VectorStore] = None,
-        queue: Optional[IndexQueue] = None,
+        progress_callback: Callable[[str, int, int], None] | None = None,
+        image_vector_store: VectorStore | None = None,
+        queue: IndexQueue | None = None,
     ) -> None:
         """
         Args:
@@ -112,7 +113,7 @@ class IndexService:
     def index_path(
         self,
         root: Path,
-        ignore_patterns: Optional[Set[str]] = None,
+        ignore_patterns: set[str] | None = None,
     ) -> dict[str, int]:
         """
         Recursively index all supported files under *root*.
@@ -133,31 +134,33 @@ class IndexService:
 
         if self._queue is not None:
             counts = self._enqueue_path(files)
-            logger.info("Queued %d tasks (skipped %d)", counts.get("queued", 0), counts.get("skipped", 0))
+            logger.info(
+                "Queued %d tasks (skipped %d)", counts.get("queued", 0), counts.get("skipped", 0)
+            )
             return counts
 
-        counts: dict[str, int] = {"indexed": 0, "skipped": 0, "failed": 0}
+        sync_counts: dict[str, int] = {"indexed": 0, "skipped": 0, "failed": 0}
         for i, path in enumerate(files):
             if self._progress_callback:
                 self._progress_callback(str(path), i + 1, len(files))
             result = self._index_single(path)
-            counts[result] += 1
+            sync_counts[result] += 1
 
         self._vector_store.persist()
         if self._image_vector_store is not None:
             self._image_vector_store.persist()
         logger.info(
             "Indexing complete — indexed=%d skipped=%d failed=%d",
-            counts["indexed"],
-            counts["skipped"],
-            counts["failed"],
+            sync_counts["indexed"],
+            sync_counts["skipped"],
+            sync_counts["failed"],
         )
-        return counts
+        return sync_counts
 
     def index_file(
         self,
         path: Path,
-        ignore_patterns: Optional[Set[str]] = None,
+        ignore_patterns: set[str] | None = None,
     ) -> str:
         """
         Index a single file.
@@ -184,14 +187,14 @@ class IndexService:
             self._image_vector_store.persist()
         return result
 
-    def get_record(self, path: str) -> Optional[FileRecord]:
+    def get_record(self, path: str) -> FileRecord | None:
         """Return the metadata record for a path, or None."""
         return self._metadata_store.get(path)
 
     def dry_run(
         self,
         root: Path,
-        ignore_patterns: Optional[Set[str]] = None,
+        ignore_patterns: set[str] | None = None,
     ) -> dict[str, int | list[str]]:
         """
         Walk the tree, classify each file, and report what would actually change.
@@ -206,9 +209,9 @@ class IndexService:
         No indexing, embedding, or writes are performed.
 
         Returns a dict with keys:
-          ``to_index``        – list of path strings that would be processed
-          ``already_indexed`` – list of path strings that would be skipped
-          ``estimated_chunks``– estimated new chunks for ``to_index`` files only
+          ``to_index``        - list of path strings that would be processed
+          ``already_indexed`` - list of path strings that would be skipped
+          ``estimated_chunks``- estimated new chunks for ``to_index`` files only
         """
         root = root.resolve()
         if not root.exists():
@@ -277,7 +280,11 @@ class IndexService:
         chunk_ids = self._metadata_store.get_chunk_ids(path_str)
         record = self._metadata_store.get(path_str)
         if chunk_ids:
-            if record is not None and record.file_type == FileType.IMAGE and self._image_vector_store is not None:
+            if (
+                record is not None
+                and record.file_type == FileType.IMAGE
+                and self._image_vector_store is not None
+            ):
                 self._image_vector_store.delete(chunk_ids)
             else:
                 self._vector_store.delete(chunk_ids)
@@ -326,7 +333,7 @@ class IndexService:
     def _collect_files(
         self,
         root: Path,
-        ignore_patterns: Optional[Set[str]] = None,
+        ignore_patterns: set[str] | None = None,
     ) -> list[Path]:
         """
         Walk the directory tree and return files that have a matching parser.
@@ -353,13 +360,14 @@ class IndexService:
             # with 100k files) is excluded with one comparison rather than 100k.
             # Directories are matched with all pattern types (exact, glob, extension).
             dirnames[:] = [
-                d for d in dirnames
-                if not d.startswith(".")                                  # hidden dirs
-                and not any(matches_pattern(d, p) for p in effective)    # ignored dirs
+                d
+                for d in dirnames
+                if not d.startswith(".")  # hidden dirs
+                and not any(matches_pattern(d, p) for p in effective)  # ignored dirs
             ]
 
             for filename in filenames:
-                if filename.startswith("."):      # hidden files
+                if filename.startswith("."):  # hidden files
                     continue
                 if any(matches_pattern(filename, p) for p in effective):  # all pattern types
                     continue
@@ -370,7 +378,7 @@ class IndexService:
         return sorted(files)
 
     @staticmethod
-    def _is_ignored(path: Path, root: Path, patterns: Set[str]) -> bool:
+    def _is_ignored(path: Path, root: Path, patterns: set[str]) -> bool:
         """True if any path component under root is in patterns."""
         try:
             rel = path.relative_to(root)
@@ -383,7 +391,7 @@ class IndexService:
         """Return True if any component of the path starts with '.'."""
         return any(part.startswith(".") for part in path.parts)
 
-    def _find_parser(self, path: Path) -> Optional[FileParser]:
+    def _find_parser(self, path: Path) -> FileParser | None:
         """Return the first parser that supports this file, or None."""
         for parser in self._parsers:
             if parser.supports(path):
@@ -395,6 +403,7 @@ class IndexService:
         Enqueue a single file for background indexing (idempotency: skip if already indexed).
         Returns 'queued' or 'skipped'.
         """
+        assert self._queue is not None, "_enqueue_single requires a configured queue"
         parser = self._find_parser(path)
         if parser is None:
             return "skipped"
@@ -474,7 +483,7 @@ class IndexService:
 
         try:
             chunk_ids = self._embed_and_store(chunks, parser.file_type(), path)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("Embedding/store failed for %s: %s", path, exc, exc_info=True)
             self._metadata_store.upsert(
                 FileRecord(
@@ -541,7 +550,11 @@ class IndexService:
         if file_type == FileType.IMAGE:
             vectors = self._image_embedder.embed_image([path])
             cid = f"{path}::0"
-            store = self._image_vector_store if self._image_vector_store is not None else self._vector_store
+            store = (
+                self._image_vector_store
+                if self._image_vector_store is not None
+                else self._vector_store
+            )
             store.add([cid], vectors)
             chunk_ids.append(cid)
         else:

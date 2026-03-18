@@ -18,12 +18,10 @@ other infrastructure types leak into this file.
 from __future__ import annotations
 
 import logging
-import sys
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 from urllib.request import pathname2url
 
 import typer
@@ -93,10 +91,10 @@ _DRY_RUN_HELP = (
 
 @app.command(help="[bold]Index[/] a file or directory for semantic search.")
 def index(
-    path: Optional[Path] = typer.Option(None, "--path", "-p", help=_PATH_INDEX_HELP),
+    path: Path | None = typer.Option(None, "--path", "-p", help=_PATH_INDEX_HELP),
     verbose: bool = typer.Option(False, "--verbose", "-v", help=_VERBOSE_HELP),
-    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
-    exclude: Optional[str] = typer.Option(None, "--exclude", "-e", help=_EXCLUDE_HELP),
+    data_dir: Path | None = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
+    exclude: str | None = typer.Option(None, "--exclude", "-e", help=_EXCLUDE_HELP),
     dry_run: bool = typer.Option(False, "--dry-run", help=_DRY_RUN_HELP),
 ) -> None:
     """
@@ -112,9 +110,9 @@ def index(
       seekr index --path ~/Downloads --dry-run
     """
     _setup_logging(verbose)
-    from seekr.infrastructure.container import Container  # noqa: PLC0415
-    from seekr.infrastructure.ignore import load_ignore_patterns  # noqa: PLC0415
-    from seekr.config.settings import NUM_INDEX_WORKERS  # noqa: PLC0415
+    from seekr.config.settings import NUM_INDEX_WORKERS
+    from seekr.infrastructure.container import Container
+    from seekr.infrastructure.ignore import load_ignore_patterns
 
     # Default to current working directory when no path is given
     resolved_path: Path = (path or Path.cwd()).expanduser().resolve()
@@ -169,9 +167,7 @@ def index(
             "\n[dim]Run without --dry-run to index. "
             "Adjust --exclude or .seekrignore if the count is too high.[/]"
         )
-        console.print(
-            Panel(summary, title="[bold]Dry run[/] (no indexing)", border_style="cyan")
-        )
+        console.print(Panel(summary, title="[bold]Dry run[/] (no indexing)", border_style="cyan"))
         return
 
     svc = container.index_service(background=True, progress_callback=None)
@@ -240,7 +236,9 @@ def index(
         progress.update(task_id, completed=min(done_this_run, queued))
 
     worker_thread.join()
-    console.print(Panel("[green]Indexing complete.[/]", title="[bold]Index[/]", border_style="green"))
+    console.print(
+        Panel("[green]Indexing complete.[/]", title="[bold]Index[/]", border_style="green")
+    )
 
 
 # ------------------------------------------------------------------
@@ -265,13 +263,15 @@ _TYPE_ICONS: dict[str, str] = {
 def search(
     query: str = typer.Argument(..., help="Natural-language search query."),
     top_k: int = typer.Option(10, "--top", "-n", help="Number of results to return."),
-    file_type: Optional[str] = typer.Option(
-        None, "--type", "-t",
+    file_type: str | None = typer.Option(
+        None,
+        "--type",
+        "-t",
         help="Filter by type: text, image, code, document.",
     ),
-    path: Optional[Path] = typer.Option(None, "--path", "-p", help=_PATH_SEARCH_HELP),
+    path: Path | None = typer.Option(None, "--path", "-p", help=_PATH_SEARCH_HELP),
     verbose: bool = typer.Option(False, "--verbose", "-v", help=_VERBOSE_HELP),
-    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
+    data_dir: Path | None = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
 ) -> None:
     """
     [bold]Search[/] the index with a natural-language query.
@@ -283,8 +283,8 @@ def search(
       seekr search "config" --path ~/Downloads/docs
     """
     _setup_logging(verbose)
-    from seekr.infrastructure.container import Container  # noqa: PLC0415
-    from seekr.domain.entities import FileType  # noqa: PLC0415
+    from seekr.domain.entities import FileType
+    from seekr.infrastructure.container import Container
 
     container = Container(data_dir=data_dir or Path.home() / ".seekr")
 
@@ -292,12 +292,12 @@ def search(
     if file_type:
         try:
             type_filter = FileType[file_type.upper()]
-        except KeyError:
+        except KeyError as exc:
             console.print(
                 f"[red]Unknown file type:[/] {file_type}. "
                 "Choose from: text, image, code, document."
             )
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from exc
 
     path_prefix = path.expanduser().resolve() if path else None
     svc = container.search_service()
@@ -340,11 +340,7 @@ def search(
 
     for i, result in enumerate(results, 1):
         score_pct = f"{result.score * 100:.1f}%"
-        score_style = (
-            "green" if result.score > 0.7
-            else "yellow" if result.score > 0.45
-            else "red"
-        )
+        score_style = "green" if result.score > 0.7 else "yellow" if result.score > 0.45 else "red"
         icon = _TYPE_ICONS.get(result.file_type.name, "❓")
         abs_path = str(Path(result.file_path).expanduser().resolve())
         file_url = "file://" + pathname2url(abs_path)
@@ -376,21 +372,24 @@ def search(
 # watch command
 # ------------------------------------------------------------------
 
+
 @app.command(help="[bold]Watch[/] directories and auto-index new/modified files.")
 def watch(
     paths: list[Path] = typer.Argument(..., help="Directories to watch."),
     verbose: bool = typer.Option(False, "--verbose", "-v", help=_VERBOSE_HELP),
-    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
+    data_dir: Path | None = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
     daemon: bool = typer.Option(
-        False, "--daemon", "-d",
-        help="Run in the background. Logs go to ~/.seekr/watch.log. "
-             "Stop with seekr watch-stop.",
+        False,
+        "--daemon",
+        "-d",
+        help="Run in the background. Logs go to ~/.seekr/watch.log. " "Stop with seekr watch-stop.",
     ),
     _worker: bool = typer.Option(
-        False, "--_worker",
+        False,
+        "--_worker",
         hidden=True,
         help="Internal: skip daemonize and run directly as the daemon worker "
-             "(used by --daemon on Windows).",
+        "(used by --daemon on Windows).",
     ),
 ) -> None:
     """
@@ -404,9 +403,9 @@ def watch(
       seekr watch-stop                     # stop background watcher
     """
     _setup_logging(verbose)
-    from seekr.infrastructure.container import Container  # noqa: PLC0415
-    from seekr.infrastructure.ignore import load_ignore_patterns  # noqa: PLC0415
-    from seekr.config.settings import NUM_INDEX_WORKERS  # noqa: PLC0415
+    from seekr.config.settings import NUM_INDEX_WORKERS
+    from seekr.infrastructure.container import Container
+    from seekr.infrastructure.ignore import load_ignore_patterns
 
     data_dir_path = data_dir or Path.home() / ".seekr"
 
@@ -420,7 +419,7 @@ def watch(
 
     if daemon and not _worker:
         # ---- Parent path (both POSIX and Windows) ----
-        from seekr.infrastructure.daemon import daemonize, is_running  # noqa: PLC0415
+        from seekr.infrastructure.daemon import daemonize, is_running
 
         running, existing_pid = is_running(data_dir_path)
         if running:
@@ -459,7 +458,7 @@ def watch(
     # ------------------------------------------------------------------
     # Set up container, workers, and watcher (runs for all paths)
     # ------------------------------------------------------------------
-    import threading as _threading  # noqa: PLC0415
+    import threading as _threading
 
     container = Container(data_dir=data_dir_path)
     # Load global patterns first, then merge in the local .seekrignore from
@@ -479,15 +478,14 @@ def watch(
     )
 
     def _on_event(event_type: str, event_path: Path) -> None:
-        icons = {"created": "➕", "modified": "✏️", "deleted": "🗑️"}
+        icons = {"created": "➕", "modified": "✏️", "deleted": "🗑️"}  # noqa: RUF001
         icon = icons.get(event_type, "•")
         ts = datetime.now().strftime("%H:%M:%S")
         if is_background:
             logger.info("%s %s: %s", icon, event_type, event_path)
         else:
             label = (
-                f"[dim]{ts}[/] {icon} [bold]{event_type}[/]: "
-                f"{_shorten_path(str(event_path))}"
+                f"[dim]{ts}[/] {icon} [bold]{event_type}[/]: " f"{_shorten_path(str(event_path))}"
             )
             console.print(label)
 
@@ -525,22 +523,21 @@ def watch(
 # watch-stop command
 # ------------------------------------------------------------------
 
+
 @app.command(name="watch-stop", help="Stop the background [bold]seekr watch --daemon[/] process.")
 def watch_stop(
-    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
+    data_dir: Path | None = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
 ) -> None:
     """
     Stop the background [bold]seekr watch --daemon[/] process.
     """
-    from seekr.infrastructure.daemon import stop_daemon, read_watched_paths  # noqa: PLC0415
+    from seekr.infrastructure.daemon import read_watched_paths, stop_daemon
 
     data_dir_path = data_dir or Path.home() / ".seekr"
     paths = read_watched_paths(data_dir_path)
     ok, msg = stop_daemon(data_dir_path)
     if ok:
-        details = (
-            "\n".join(f"  📁 [dim]{p}[/]" for p in paths) + "\n\n" if paths else ""
-        )
+        details = "\n".join(f"  📁 [dim]{p}[/]" for p in paths) + "\n\n" if paths else ""
         console.print(
             Panel(
                 details + f"[green]{msg}[/]",
@@ -556,16 +553,17 @@ def watch_stop(
 # status command
 # ------------------------------------------------------------------
 
+
 @app.command(help="Show index [bold]status[/] and statistics.")
 def status(
-    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
+    data_dir: Path | None = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
     verbose: bool = typer.Option(False, "--verbose", "-v", help=_VERBOSE_HELP),
 ) -> None:
     """
     Show index [bold]status[/] and statistics (including background queue progress).
     """
     _setup_logging(verbose)
-    from seekr.infrastructure.container import Container  # noqa: PLC0415
+    from seekr.infrastructure.container import Container
 
     container = Container(data_dir=data_dir or Path.home() / ".seekr")
     meta = container.metadata_store
@@ -596,14 +594,10 @@ def status(
     _row("Index size", _human_bytes(stats.index_size_bytes))
     _row(
         "Last updated",
-        stats.last_updated.strftime("%Y-%m-%d %H:%M UTC")
-        if stats.last_updated
-        else "never",
+        stats.last_updated.strftime("%Y-%m-%d %H:%M UTC") if stats.last_updated else "never",
     )
 
-    console.print(
-        Panel(grid, title="[bold]Seekr Index Status[/]", border_style="cyan")
-    )
+    console.print(Panel(grid, title="[bold]Seekr Index Status[/]", border_style="cyan"))
 
     try:
         queue = container.index_queue
@@ -618,9 +612,7 @@ def status(
             queue_grid.add_row("Pending", str(qstats.pending))
             queue_grid.add_row("Failed", str(qstats.failed))
             queue_grid.add_row("Progress", f"{qstats.progress_pct:.0f}%")
-            console.print(
-                Panel(queue_grid, title="[bold]Index Queue[/]", border_style="cyan")
-            )
+            console.print(Panel(queue_grid, title="[bold]Index Queue[/]", border_style="cyan"))
     except Exception as exc:
         logger.debug("Could not read queue stats: %s", exc)
 
@@ -629,15 +621,18 @@ def status(
 # prune command
 # ------------------------------------------------------------------
 
+
 @app.command(help="[bold]Prune[/] a path from the index.")
 def prune(
-    path: Optional[Path] = typer.Option(
-        None, "--path", "-p",
+    path: Path | None = typer.Option(
+        None,
+        "--path",
+        "-p",
         help="Directory (or file) to remove from the index. "
-             "Defaults to the current directory. "
-             "All indexed files under this path are pruned.",
+        "Defaults to the current directory. "
+        "All indexed files under this path are pruned.",
     ),
-    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
+    data_dir: Path | None = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
     verbose: bool = typer.Option(False, "--verbose", "-v", help=_VERBOSE_HELP),
 ) -> None:
     """
@@ -651,7 +646,7 @@ def prune(
       seekr prune                               # prunes current directory
     """
     _setup_logging(verbose)
-    from seekr.infrastructure.container import Container  # noqa: PLC0415
+    from seekr.infrastructure.container import Container
 
     data_dir_path = data_dir or Path.home() / ".seekr"
     container = Container(data_dir=data_dir_path)
@@ -678,9 +673,10 @@ def prune(
 # reset command
 # ------------------------------------------------------------------
 
+
 @app.command(help="[bold]Reset[/] the index — wipe all indexed data and start over.")
 def reset(
-    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
+    data_dir: Path | None = typer.Option(None, "--data-dir", help=_DATA_DIR_HELP),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation prompt."),
     verbose: bool = typer.Option(False, "--verbose", "-v", help=_VERBOSE_HELP),
 ) -> None:
@@ -691,7 +687,7 @@ def reset(
     are kept. Run [bold]seekr index[/] after this to rebuild.
     """
     _setup_logging(verbose)
-    import shutil  # noqa: PLC0415
+    import shutil
 
     data_dir_path = data_dir or Path.home() / ".seekr"
     meta_file = data_dir_path / "metadata.db"
@@ -740,13 +736,14 @@ def reset(
 # Utility helpers
 # ------------------------------------------------------------------
 
+
 def _shorten_path(path: str, max_len: int = 60) -> str:
     """Abbreviate a long absolute path using ~ for the home directory."""
     home = str(Path.home())
     if path.startswith(home):
-        path = "~" + path[len(home):]
+        path = "~" + path[len(home) :]
     if len(path) > max_len:
-        path = "…" + path[-(max_len - 1):]
+        path = "…" + path[-(max_len - 1) :]
     return path
 
 
@@ -762,6 +759,7 @@ def _human_bytes(n: float) -> str:
 # ------------------------------------------------------------------
 # Entry point
 # ------------------------------------------------------------------
+
 
 def main() -> None:
     app()

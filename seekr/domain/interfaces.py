@@ -11,8 +11,8 @@ Architecture note: This is the "ports" side of ports-and-adapters.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Iterator, Optional, Sequence
 
 from seekr.domain.entities import (
     FileChunk,
@@ -21,7 +21,6 @@ from seekr.domain.entities import (
     IndexStats,
     IndexTask,
     QueueStats,
-    SearchResult,
 )
 
 
@@ -177,7 +176,7 @@ class MetadataStore(ABC):
         ...
 
     @abstractmethod
-    def get(self, path: str) -> Optional[FileRecord]:
+    def get(self, path: str) -> FileRecord | None:
         """Retrieve the record for a given file path, or None."""
         ...
 
@@ -259,9 +258,9 @@ class FileWatcher(ABC):
     def start(
         self,
         paths: list[Path],
-        on_created: ...,
-        on_modified: ...,
-        on_deleted: ...,
+        on_created: Callable[[Path], None],
+        on_modified: Callable[[Path], None],
+        on_deleted: Callable[[Path], None],
     ) -> None:
         """
         Begin watching the given paths.

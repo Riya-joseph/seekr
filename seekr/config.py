@@ -9,21 +9,20 @@ Use ``seekr.config.settings`` directly:
 import warnings
 
 warnings.warn(
-    "Importing from seekr.config is deprecated. "
-    "Use seekr.config.settings instead.",
+    "Importing from seekr.config is deprecated. " "Use seekr.config.settings instead.",
     DeprecationWarning,
     stacklevel=2,
 )
 
-from seekr.config.settings import (  # noqa: F401
+from seekr.config.settings import (  # noqa: F401, E402
     CHUNK_OVERLAP,
     CHUNK_SIZE,
+    CLIP_DIM,
+    CLIP_MODEL_NAME,
+    DEFAULT_DEVICE,
     MAX_CHARS_PER_FILE,
     MAX_CHUNKS_PER_FILE,
     NUM_INDEX_WORKERS,
-    TEXT_MODEL_NAME,
-    CLIP_MODEL_NAME,
     TEXT_DIM,
-    CLIP_DIM,
-    DEFAULT_DEVICE,
+    TEXT_MODEL_NAME,
 )

@@ -18,10 +18,9 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import cast
 
 from seekr.domain.entities import FileRecord, FileType, IndexStats, IndexStatus
-from seekr.domain.exceptions import StoreError
 from seekr.domain.interfaces import MetadataStore
 
 logger = logging.getLogger(__name__)
@@ -111,11 +110,9 @@ class SQLiteMetadataStore(MetadataStore):
         )
         conn.commit()
 
-    def get(self, path: str) -> Optional[FileRecord]:
+    def get(self, path: str) -> FileRecord | None:
         conn = self._conn()
-        row = conn.execute(
-            "SELECT * FROM files WHERE path = ?", (path,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM files WHERE path = ?", (path,)).fetchone()
         return self._row_to_record(row) if row else None
 
     def delete(self, path: str) -> None:
@@ -126,9 +123,7 @@ class SQLiteMetadataStore(MetadataStore):
 
     def get_chunk_ids(self, path: str) -> list[str]:
         conn = self._conn()
-        rows = conn.execute(
-            "SELECT chunk_id FROM chunks WHERE path = ?", (path,)
-        ).fetchall()
+        rows = conn.execute("SELECT chunk_id FROM chunks WHERE path = ?", (path,)).fetchall()
         return [r[0] for r in rows]
 
     def upsert_chunks(self, path: str, chunk_ids: list[str]) -> None:
@@ -160,9 +155,7 @@ class SQLiteMetadataStore(MetadataStore):
         image_files = conn.execute(
             "SELECT COUNT(*) FROM files WHERE file_type = 'IMAGE' AND status = 'indexed'"
         ).fetchone()[0]
-        last_row = conn.execute(
-            "SELECT MAX(indexed_at) FROM files"
-        ).fetchone()[0]
+        last_row = conn.execute("SELECT MAX(indexed_at) FROM files").fetchone()[0]
         last_updated = _str_to_dt(last_row) if last_row else None
 
         # Approximate size: count total characters in chunk content
@@ -189,7 +182,7 @@ class SQLiteMetadataStore(MetadataStore):
             conn.execute("PRAGMA foreign_keys=ON")
             conn.row_factory = sqlite3.Row
             self._local.conn = conn
-        return self._local.conn
+        return cast(sqlite3.Connection, self._local.conn)
 
     @staticmethod
     def _row_to_record(row: sqlite3.Row) -> FileRecord:

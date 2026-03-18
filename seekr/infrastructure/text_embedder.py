@@ -13,9 +13,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Optional
-
-import numpy as np
+from typing import Any
 
 from seekr.domain.exceptions import ModelError
 from seekr.domain.interfaces import EmbeddingModel
@@ -38,12 +36,12 @@ class SentenceTransformerEmbedder(EmbeddingModel):
         self,
         model_name: str = _DEFAULT_MODEL,
         device: str = "cpu",
-        cache_dir: Optional[Path] = None,
+        cache_dir: Path | None = None,
     ) -> None:
         self._model_name = model_name
         self._device = device
         self._cache_dir = str(Path(cache_dir).expanduser().resolve()) if cache_dir else None
-        self._model: Optional[object] = None  # loaded lazily
+        self._model: Any = None  # loaded lazily
 
     # ------------------------------------------------------------------
     # EmbeddingModel interface
@@ -76,7 +74,7 @@ class SentenceTransformerEmbedder(EmbeddingModel):
                 show_progress_bar=False,
                 convert_to_numpy=True,
             )
-            return embeddings.tolist()
+            return embeddings.tolist()  # type: ignore[no-any-return]
         except Exception as exc:
             raise ModelError(f"Text embedding failed: {exc}") from exc
 
@@ -91,7 +89,7 @@ class SentenceTransformerEmbedder(EmbeddingModel):
     # Internal
     # ------------------------------------------------------------------
 
-    def _get_model(self) -> object:
+    def _get_model(self) -> Any:
         if self._model is None:
             logger.debug("Loading text embedding model: %s", self._model_name)
             try:
@@ -102,10 +100,14 @@ class SentenceTransformerEmbedder(EmbeddingModel):
                 _tqdm_disable = os.environ.get("TQDM_DISABLE")
                 os.environ["TQDM_DISABLE"] = "1"
                 try:
-                    from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+                    from sentence_transformers import SentenceTransformer
 
                     # Suppress load-report and progress noise from transformers/HF
-                    for _noisy in ("huggingface_hub", "transformers", "transformers.modeling_utils"):
+                    for _noisy in (
+                        "huggingface_hub",
+                        "transformers",
+                        "transformers.modeling_utils",
+                    ):
                         logging.getLogger(_noisy).setLevel(logging.ERROR)
 
                     self._model = SentenceTransformer(

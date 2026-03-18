@@ -10,10 +10,8 @@ Verifies that:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional
-
-import pytest
 
 from seekr.application.index_service import IndexService
 from seekr.domain.entities import (
@@ -29,11 +27,11 @@ from seekr.domain.interfaces import (
     VectorStore,
 )
 
-
 # ---------------------------------------------------------------------------
 # Re-use stubs from test_index_service (copy lightweight versions here to keep
 # tests self-contained)
 # ---------------------------------------------------------------------------
+
 
 class _StubEmbedder(EmbeddingModel):
     @property
@@ -124,6 +122,7 @@ class _FailingParser(FileParser):
 # Parse errors
 # ---------------------------------------------------------------------------
 
+
 class TestParseErrors:
     def test_parse_failure_does_not_raise(self, tmp_path: Path) -> None:
         f = tmp_path / "bad.txt"
@@ -155,12 +154,14 @@ class TestParseErrors:
         record = meta.get(str(f))
         assert record is not None
         from seekr.domain.entities import IndexStatus
+
         assert record.status == IndexStatus.FAILED
 
 
 # ---------------------------------------------------------------------------
 # Embedding errors
 # ---------------------------------------------------------------------------
+
 
 class TestEmbeddingErrors:
     def test_embedding_failure_does_not_raise(self, tmp_path: Path) -> None:
@@ -198,4 +199,7 @@ class TestEmbeddingErrors:
         record = meta.get(str(f))
         assert record is not None
         assert record.error_message is not None
-        assert "embedding" in record.error_message.lower() or "simulated" in record.error_message.lower()
+        assert (
+            "embedding" in record.error_message.lower()
+            or "simulated" in record.error_message.lower()
+        )

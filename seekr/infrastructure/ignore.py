@@ -16,8 +16,8 @@ Pattern matching rules (applied to file and directory *names*, not full paths):
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Optional
 
 from seekr.domain.patterns import is_ignored, matches_pattern  # noqa: F401  — re-exported
 
@@ -25,55 +25,57 @@ logger = logging.getLogger(__name__)
 
 # Directory and file names to ignore when they appear as a path component.
 # Keeps index relevant and avoids explosion from node_modules, .git, etc.
-DEFAULT_IGNORE_PATTERNS = frozenset({
-    # VCS and metadata
-    ".git",
-    ".svn",
-    ".hg",
-    ".bzr",
-    # Python
-    "__pycache__",
-    ".venv",
-    "venv",
-    "env",
-    ".tox",
-    ".mypy_cache",
-    ".ruff_cache",
-    ".pytest_cache",
-    "egg-info",
-    ".eggs",
-    # Node / frontend
-    "node_modules",
-    ".next",
-    ".nuxt",
-    ".output",
-    "dist",
-    ".parcel-cache",
-    ".cache",
-    ".turbo",
-    # Rust / Go / C
-    "target",      # Rust
-    "vendor",      # Go
-    "build",
-    "out",
-    # IDE / editor
-    ".idea",
-    ".vscode",
-    ".vs",
-    # OS / misc
-    ".DS_Store",
-    "Thumbs.db",
-    # Common build/cache
-    "coverage",
-    ".coverage",
-    "htmlcov",
-    ".nx",
-    ".direnv",
-    "tmp",
-    "temp",
-    ".tmp",
-    ".temp",
-})
+DEFAULT_IGNORE_PATTERNS = frozenset(
+    {
+        # VCS and metadata
+        ".git",
+        ".svn",
+        ".hg",
+        ".bzr",
+        # Python
+        "__pycache__",
+        ".venv",
+        "venv",
+        "env",
+        ".tox",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".pytest_cache",
+        "egg-info",
+        ".eggs",
+        # Node / frontend
+        "node_modules",
+        ".next",
+        ".nuxt",
+        ".output",
+        "dist",
+        ".parcel-cache",
+        ".cache",
+        ".turbo",
+        # Rust / Go / C
+        "target",  # Rust
+        "vendor",  # Go
+        "build",
+        "out",
+        # IDE / editor
+        ".idea",
+        ".vscode",
+        ".vs",
+        # OS / misc
+        ".DS_Store",
+        "Thumbs.db",
+        # Common build/cache
+        "coverage",
+        ".coverage",
+        "htmlcov",
+        ".nx",
+        ".direnv",
+        "tmp",
+        "temp",
+        ".tmp",
+        ".temp",
+    }
+)
 
 
 def _parse_ignore_file(path: Path) -> set[str]:
@@ -96,8 +98,8 @@ def _parse_ignore_file(path: Path) -> set[str]:
 
 def load_ignore_patterns(
     data_dir: Path,
-    index_root: Optional[Path] = None,
-    extra: Optional[Iterable[str]] = None,
+    index_root: Path | None = None,
+    extra: Iterable[str] | None = None,
 ) -> set[str]:
     """
     Build the set of path-component patterns to ignore when indexing.
@@ -163,5 +165,3 @@ def load_ignore_patterns(
             if p:
                 patterns.add(p)
     return patterns
-
-

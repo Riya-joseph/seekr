@@ -9,8 +9,8 @@ so large files do not dominate the index.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 from seekr.config import (
     CHUNK_OVERLAP,
@@ -115,9 +115,23 @@ def _read_text_capped(path: Path, max_chars: int = MAX_CHARS_PER_FILE) -> str:
 # ---------------------------------------------------------------------------
 
 _TEXT_EXTENSIONS = {
-    ".txt", ".md", ".markdown", ".rst", ".log", ".csv",
-    ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg",
-    ".xml", ".html", ".htm", ".tex", ".org",
+    ".txt",
+    ".md",
+    ".markdown",
+    ".rst",
+    ".log",
+    ".csv",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".xml",
+    ".html",
+    ".htm",
+    ".tex",
+    ".org",
 }
 
 
@@ -144,17 +158,45 @@ class PlainTextParser(FileParser):
 # ---------------------------------------------------------------------------
 
 _CODE_EXTENSIONS = {
-    ".py", ".pyi", ".js", ".jsx", ".ts", ".tsx",
-    ".java", ".kt", ".scala", ".groovy",
-    ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp",
-    ".go", ".rs", ".swift",
-    ".rb", ".php", ".lua", ".r",
-    ".sh", ".bash", ".zsh", ".fish",
-    ".sql", ".graphql", ".proto",
-    ".tf", ".hcl",
-    ".dart", ".cs", ".vb",
-    ".asm", ".s",
-    "Makefile", "Dockerfile",
+    ".py",
+    ".pyi",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".java",
+    ".kt",
+    ".scala",
+    ".groovy",
+    ".c",
+    ".cpp",
+    ".cc",
+    ".cxx",
+    ".h",
+    ".hpp",
+    ".go",
+    ".rs",
+    ".swift",
+    ".rb",
+    ".php",
+    ".lua",
+    ".r",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".sql",
+    ".graphql",
+    ".proto",
+    ".tf",
+    ".hcl",
+    ".dart",
+    ".cs",
+    ".vb",
+    ".asm",
+    ".s",
+    "Makefile",
+    "Dockerfile",
 }
 
 
@@ -162,10 +204,7 @@ class CodeParser(FileParser):
     """Parser for source code files."""
 
     def supports(self, path: Path) -> bool:
-        return (
-            path.suffix.lower() in _CODE_EXTENSIONS
-            or path.name in _CODE_EXTENSIONS
-        )
+        return path.suffix.lower() in _CODE_EXTENSIONS or path.name in _CODE_EXTENSIONS
 
     def file_type(self) -> FileType:
         return FileType.CODE
@@ -183,11 +222,13 @@ class CodeParser(FileParser):
 # PDF parser
 # ---------------------------------------------------------------------------
 
+
 def _ocr_available() -> bool:
     """Return True if both pdf2image and pytesseract (+ tesseract binary) are present."""
     try:
-        import pdf2image  # noqa: F401, PLC0415
-        import pytesseract  # noqa: PLC0415
+        import pdf2image  # noqa: F401
+        import pytesseract
+
         pytesseract.get_tesseract_version()  # raises if tesseract binary is missing
         return True
     except Exception:
@@ -200,7 +241,7 @@ def _ocr_page(page_image: object) -> str:
 
     DPI is already handled by pdf2image (300 dpi default gives good accuracy).
     """
-    import pytesseract  # noqa: PLC0415
+    import pytesseract
 
     return pytesseract.image_to_string(page_image, lang="eng") or ""
 
@@ -230,7 +271,8 @@ class PDFParser(FileParser):
             return False
         if self._pypdf_available is None:
             try:
-                import pypdf  # noqa: F401, PLC0415
+                import pypdf  # noqa: F401
+
                 self._pypdf_available = True
             except ImportError:
                 self._pypdf_available = False
@@ -242,7 +284,7 @@ class PDFParser(FileParser):
 
     def parse(self, path: Path) -> Iterator[FileChunk]:
         try:
-            import pypdf  # noqa: PLC0415
+            import pypdf
         except ImportError as exc:
             raise ParseError("pypdf is required to parse PDF files.") from exc
 
@@ -280,7 +322,7 @@ class PDFParser(FileParser):
                 path,
             )
             try:
-                from pdf2image import convert_from_path  # noqa: PLC0415
+                from pdf2image import convert_from_path
 
                 # Render only the pages that need OCR (1-indexed for pdf2image)
                 for page_idx in ocr_page_indices:
@@ -322,9 +364,7 @@ class PDFParser(FileParser):
         full_text = full_text[:MAX_CHARS_PER_FILE]
 
         if not full_text.strip():
-            logger.warning(
-                "PDF produced no indexable text (all pages blank after OCR): %s", path
-            )
+            logger.warning("PDF produced no indexable text (all pages blank after OCR): %s", path)
             return
 
         yield from _chunk_text(full_text, str(path), self.file_type())
@@ -335,7 +375,14 @@ class PDFParser(FileParser):
 # ---------------------------------------------------------------------------
 
 _IMAGE_EXTENSIONS = {
-    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".webp",
+    ".tiff",
+    ".tif",
 }
 
 
@@ -353,7 +400,8 @@ class ImageParser(FileParser):
 
     def parse(self, path: Path) -> Iterator[FileChunk]:
         try:
-            from PIL import Image  # noqa: PLC0415
+            from PIL import Image
+
             with Image.open(path) as img:
                 width, height = img.size
                 mode = img.mode

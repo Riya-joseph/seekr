@@ -10,15 +10,13 @@ Chunking is a critical pipeline stage: correct behaviour ensures that
 
 from __future__ import annotations
 
-import pytest
-
-from seekr.infrastructure.parsers import _chunk_text
 from seekr.domain.entities import FileChunk, FileType
-
+from seekr.infrastructure.parsers import _chunk_text
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _chunks(text: str, max_chunks: int = 200) -> list[FileChunk]:
     return list(_chunk_text(text, path="test.txt", file_type=FileType.TEXT, max_chunks=max_chunks))
@@ -27,6 +25,7 @@ def _chunks(text: str, max_chunks: int = 200) -> list[FileChunk]:
 # ---------------------------------------------------------------------------
 # Basic behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestChunkText:
     def test_empty_string_produces_no_chunks(self) -> None:
@@ -61,9 +60,7 @@ class TestChunkText:
             assert chunk.content.strip()
 
     def test_file_type_propagated(self) -> None:
-        chunks = list(
-            _chunk_text("some code", path="foo.py", file_type=FileType.CODE)
-        )
+        chunks = list(_chunk_text("some code", path="foo.py", file_type=FileType.CODE))
         assert all(c.file_type == FileType.CODE for c in chunks)
 
     def test_file_path_propagated(self) -> None:
@@ -76,6 +73,7 @@ class TestChunkText:
 # ---------------------------------------------------------------------------
 # Chunk cap
 # ---------------------------------------------------------------------------
+
 
 class TestChunkCap:
     def test_chunk_cap_is_respected(self) -> None:
@@ -98,6 +96,7 @@ class TestChunkCap:
 # ---------------------------------------------------------------------------
 # Boundary / overlap
 # ---------------------------------------------------------------------------
+
 
 class TestChunkBoundaries:
     def test_start_char_of_first_chunk_is_zero(self) -> None:

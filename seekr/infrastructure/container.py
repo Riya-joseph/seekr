@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from seekr.application.index_service import IndexService
 from seekr.application.search_service import SearchService
@@ -25,11 +25,16 @@ from seekr.config.settings import (
     CLIP_DIM,
     CLIP_MODEL_NAME,
     DEFAULT_DEVICE,
-    NUM_INDEX_WORKERS,
     TEXT_DIM,
     TEXT_MODEL_NAME,
 )
-from seekr.domain.interfaces import EmbeddingModel, FileParser, IndexQueue, MetadataStore, VectorStore
+from seekr.domain.interfaces import (
+    EmbeddingModel,
+    FileParser,
+    IndexQueue,
+    MetadataStore,
+    VectorStore,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +69,12 @@ class Container:
         self._data_dir.mkdir(parents=True, exist_ok=True)
 
         # Singletons — lazy-initialised
-        self._text_embedder: Optional[EmbeddingModel] = None
-        self._clip_embedder: Optional[EmbeddingModel] = None
-        self._text_vector_store: Optional[VectorStore] = None
-        self._clip_vector_store: Optional[VectorStore] = None
-        self._metadata_store: Optional[MetadataStore] = None
-        self._index_queue: Optional[IndexQueue] = None
+        self._text_embedder: EmbeddingModel | None = None
+        self._clip_embedder: EmbeddingModel | None = None
+        self._text_vector_store: VectorStore | None = None
+        self._clip_vector_store: VectorStore | None = None
+        self._metadata_store: MetadataStore | None = None
+        self._index_queue: IndexQueue | None = None
 
     # ------------------------------------------------------------------
     # Infrastructure singletons
@@ -79,6 +84,7 @@ class Container:
     def text_embedder(self) -> EmbeddingModel:
         if self._text_embedder is None:
             from seekr.infrastructure.text_embedder import SentenceTransformerEmbedder
+
             self._text_embedder = SentenceTransformerEmbedder(
                 model_name=self._text_model_name,
                 device=self._device,
@@ -90,6 +96,7 @@ class Container:
     def clip_embedder(self) -> EmbeddingModel:
         if self._clip_embedder is None:
             from seekr.infrastructure.clip_embedder import CLIPEmbedder
+
             self._clip_embedder = CLIPEmbedder(
                 model_name=self._clip_model_name,
                 device=self._device,
@@ -101,6 +108,7 @@ class Container:
     def text_vector_store(self) -> VectorStore:
         if self._text_vector_store is None:
             from seekr.infrastructure.faiss_store import FAISSVectorStore
+
             store = FAISSVectorStore(
                 store_dir=self._data_dir / "text_index",
                 dimension=_TEXT_DIM,
@@ -113,6 +121,7 @@ class Container:
     def clip_vector_store(self) -> VectorStore:
         if self._clip_vector_store is None:
             from seekr.infrastructure.faiss_store import FAISSVectorStore
+
             store = FAISSVectorStore(
                 store_dir=self._data_dir / "clip_index",
                 dimension=_CLIP_DIM,
@@ -125,15 +134,15 @@ class Container:
     def metadata_store(self) -> MetadataStore:
         if self._metadata_store is None:
             from seekr.infrastructure.sqlite_store import SQLiteMetadataStore
-            self._metadata_store = SQLiteMetadataStore(
-                db_path=self._data_dir / "metadata.db"
-            )
+
+            self._metadata_store = SQLiteMetadataStore(db_path=self._data_dir / "metadata.db")
         return self._metadata_store
 
     @property
     def index_queue(self) -> IndexQueue:
         if self._index_queue is None:
             from seekr.infrastructure.queue.index_queue import SQLiteIndexQueue
+
             self._index_queue = SQLiteIndexQueue(db_path=self._data_dir / "metadata.db")
         return self._index_queue
 
@@ -143,12 +152,13 @@ class Container:
 
     def make_parsers(self) -> list[FileParser]:
         """Return all supported file parsers in priority order."""
-        from seekr.infrastructure.parsers import (  # noqa: PLC0415
+        from seekr.infrastructure.parsers import (
             CodeParser,
             ImageParser,
             PDFParser,
             PlainTextParser,
         )
+
         return [
             ImageParser(),
             PDFParser(),
@@ -168,7 +178,7 @@ class Container:
         This method creates an IndexService backed by no-op stubs for every
         dependency that dry_run() never touches, so it returns immediately.
         """
-        from seekr.domain.interfaces import EmbeddingModel, VectorStore  # noqa: PLC0415
+        from seekr.domain.interfaces import EmbeddingModel, VectorStore
 
         class _NoOpEmbedder(EmbeddingModel):
             @property
@@ -218,7 +228,7 @@ class Container:
 
     def index_service(
         self,
-        progress_callback: Optional[Callable[[str, int, int], None]] = None,
+        progress_callback: Callable[[str, int, int], None] | None = None,
         use_clip_for_text: bool = False,
         background: bool = False,
     ) -> IndexService:
@@ -255,8 +265,8 @@ class Container:
         self,
         num_workers: int = 4,
         daemon: bool = True,
-        stop_event: Optional[threading.Event] = None,
-        ignore_patterns: Optional[set[str]] = None,
+        stop_event: threading.Event | None = None,
+        ignore_patterns: set[str] | None = None,
     ) -> None:
         """
         Start background worker threads.
@@ -272,11 +282,13 @@ class Container:
                              even if they are already sitting in the queue from
                              a previous run.
         """
-        from seekr.infrastructure.workers.index_worker import run_worker_pool  # noqa: PLC0415
+        from seekr.infrastructure.workers.index_worker import run_worker_pool
+
         queue = self.index_queue
         index_svc = self.index_service(background=False)
         run_worker_pool(
-            queue, index_svc,
+            queue,
+            index_svc,
             num_workers=num_workers,
             daemon=daemon,
             stop_event=stop_event,
@@ -295,9 +307,9 @@ class Container:
 
     def watcher_service(
         self,
-        on_event: Optional[Callable[[str, object], None]] = None,
+        on_event: Callable[[str, Path], None] | None = None,
         use_queue: bool = False,
-        ignore_patterns: Optional[set[str]] = None,
+        ignore_patterns: set[str] | None = None,
     ) -> WatcherService:
         """
         Build a WatcherService.
@@ -306,7 +318,7 @@ class Container:
         instead of indexing synchronously. Start workers via start_index_workers() when
         using this (e.g. for seekr watch).
         """
-        from seekr.infrastructure.watcher import WatchdogFileWatcher  # noqa: PLC0415
+        from seekr.infrastructure.watcher import WatchdogFileWatcher
 
         return WatcherService(
             file_watcher=WatchdogFileWatcher(),

@@ -23,7 +23,7 @@ import json
 import logging
 import threading
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -58,7 +58,7 @@ class FAISSVectorStore(VectorStore):
         self._rev_map: dict[int, str] = {}
         self._next_id: int = 0
 
-        self._index: Optional[Any] = None  # lazy-initialised; faiss has no type stubs
+        self._index: Any | None = None  # lazy-initialised; faiss has no type stubs
         self._store_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
@@ -86,9 +86,7 @@ class FAISSVectorStore(VectorStore):
 
         arr = np.array(vectors, dtype=np.float32)
         if arr.shape[1] != self._dim:
-            raise StoreError(
-                f"Vector dimension mismatch: expected {self._dim}, got {arr.shape[1]}"
-            )
+            raise StoreError(f"Vector dimension mismatch: expected {self._dim}, got {arr.shape[1]}")
 
         with self._lock:
             index = self._get_index()
@@ -100,7 +98,7 @@ class FAISSVectorStore(VectorStore):
                     old_id = self._id_map[cid]
                     try:
                         index.remove_ids(np.array([old_id], dtype=np.int64))
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         pass  # may not exist if index was freshly rebuilt
 
                 new_id = self._next_id
@@ -124,7 +122,7 @@ class FAISSVectorStore(VectorStore):
             distances, ids = index.search(q, effective_k)
 
             results: list[tuple[str, float]] = []
-            for dist, int_id in zip(distances[0], ids[0]):
+            for dist, int_id in zip(distances[0], ids[0], strict=False):
                 if int_id == -1:
                     continue
                 chunk_id = self._rev_map.get(int(int_id))
@@ -151,7 +149,7 @@ class FAISSVectorStore(VectorStore):
     def persist(self) -> None:
         """Flush index and ID mapping to disk."""
         with self._lock:
-            import faiss  # noqa: PLC0415
+            import faiss
 
             if self._index is not None:
                 faiss.write_index(self._index, str(self._index_path))
@@ -167,13 +165,11 @@ class FAISSVectorStore(VectorStore):
     def load(self) -> None:
         """Load persisted index and ID mapping from disk."""
         with self._lock:
-            import faiss  # noqa: PLC0415
+            import faiss
 
             if self._index_path.exists():
                 self._index = faiss.read_index(str(self._index_path))
-                logger.debug(
-                    "Loaded FAISS index: %d vectors", self._index.ntotal
-                )
+                logger.debug("Loaded FAISS index: %d vectors", self._index.ntotal)
             else:
                 self._index = self._make_empty_index()
                 logger.debug("No existing FAISS index found; starting fresh.")
@@ -204,12 +200,10 @@ class FAISSVectorStore(VectorStore):
     def _make_empty_index(self) -> Any:
         """Create an empty FAISS IDMap2 wrapping a flat inner-product index."""
         try:
-            import faiss  # noqa: PLC0415
+            import faiss
 
             flat = faiss.IndexFlatIP(self._dim)
             index = faiss.IndexIDMap2(flat)
             return index
         except ImportError as exc:
-            raise StoreError(
-                "faiss-cpu is not installed. Run: pip install faiss-cpu"
-            ) from exc
+            raise StoreError("faiss-cpu is not installed. Run: pip install faiss-cpu") from exc

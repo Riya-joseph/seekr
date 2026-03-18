@@ -8,23 +8,22 @@ depending on the rest of the indexing pipeline.
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest
 
+from seekr.domain.entities import FileType
 from seekr.infrastructure.parsers import (
     CodeParser,
     ImageParser,
     PDFParser,
     PlainTextParser,
 )
-from seekr.domain.entities import FileType
-
 
 # ---------------------------------------------------------------------------
 # PlainTextParser
 # ---------------------------------------------------------------------------
+
 
 class TestPlainTextParser:
     @pytest.fixture()
@@ -64,17 +63,13 @@ class TestPlainTextParser:
         f.write_text("", encoding="utf-8")
         assert list(parser.parse(f)) == []
 
-    def test_chunks_have_correct_file_type(
-        self, parser: PlainTextParser, tmp_path: Path
-    ) -> None:
+    def test_chunks_have_correct_file_type(self, parser: PlainTextParser, tmp_path: Path) -> None:
         f = tmp_path / "doc.txt"
         f.write_text("Some content here.\n" * 100, encoding="utf-8")
         for chunk in parser.parse(f):
             assert chunk.file_type == FileType.TEXT
 
-    def test_chunks_carry_file_path(
-        self, parser: PlainTextParser, tmp_path: Path
-    ) -> None:
+    def test_chunks_carry_file_path(self, parser: PlainTextParser, tmp_path: Path) -> None:
         f = tmp_path / "doc.txt"
         f.write_text("content", encoding="utf-8")
         for chunk in parser.parse(f):
@@ -84,6 +79,7 @@ class TestPlainTextParser:
 # ---------------------------------------------------------------------------
 # CodeParser
 # ---------------------------------------------------------------------------
+
 
 class TestCodeParser:
     @pytest.fixture()
@@ -117,6 +113,7 @@ class TestCodeParser:
 # PDFParser  — only smoke-tests (pypdf may not be installed in all envs)
 # ---------------------------------------------------------------------------
 
+
 class TestPDFParser:
     @pytest.fixture()
     def parser(self) -> PDFParser:
@@ -125,6 +122,7 @@ class TestPDFParser:
     def test_supports_pdf_when_pypdf_available(self, parser: PDFParser) -> None:
         try:
             import pypdf  # noqa: F401
+
             assert parser.supports(Path("doc.pdf"))
         except ImportError:
             pytest.skip("pypdf not installed")
@@ -139,6 +137,7 @@ class TestPDFParser:
 # ---------------------------------------------------------------------------
 # ImageParser
 # ---------------------------------------------------------------------------
+
 
 class TestImageParser:
     @pytest.fixture()
@@ -159,7 +158,8 @@ class TestImageParser:
 
     def test_parse_produces_single_chunk(self, parser: ImageParser, tmp_path: Path) -> None:
         try:
-            from PIL import Image  # noqa: F401
+            from PIL import Image
+
             img_path = tmp_path / "test.png"
             img = Image.new("RGB", (10, 10), color=(255, 0, 0))
             img.save(img_path)

@@ -12,6 +12,7 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 
 from seekr.domain.entities import IndexTask, QueueStats, TaskStatus
 from seekr.domain.interfaces import IndexQueue
@@ -62,7 +63,7 @@ class SQLiteIndexQueue(IndexQueue):
             conn.execute("PRAGMA journal_mode=WAL")
             conn.row_factory = sqlite3.Row
             self._local.conn = conn
-        return self._local.conn
+        return cast(sqlite3.Connection, self._local.conn)
 
     def enqueue_file(self, file_path: str, file_hash: str) -> int:
         now = _dt_to_str(datetime.now(timezone.utc))
@@ -75,6 +76,7 @@ class SQLiteIndexQueue(IndexQueue):
             (file_path, file_hash, now, now),
         )
         conn.commit()
+        assert cur.lastrowid is not None, "INSERT did not produce a rowid"
         task_id = cur.lastrowid
         logger.debug("Enqueued task %s for %s", task_id, file_path)
         return task_id

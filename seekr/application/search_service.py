@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 from seekr.domain.entities import FileType, SearchResult
 from seekr.domain.exceptions import SearchError
@@ -42,7 +41,7 @@ class SearchService:
         image_embedder: EmbeddingModel,
         vector_store: VectorStore,
         metadata_store: MetadataStore,
-        image_vector_store: Optional[VectorStore] = None,
+        image_vector_store: VectorStore | None = None,
     ) -> None:
         self._text_embedder = text_embedder
         self._image_embedder = image_embedder
@@ -54,8 +53,8 @@ class SearchService:
         self,
         query: str,
         top_k: int = 10,
-        file_type_filter: Optional[FileType] = None,
-        path_prefix: Optional[Path] = None,
+        file_type_filter: FileType | None = None,
+        path_prefix: Path | None = None,
     ) -> list[SearchResult]:
         """
         Search the index with a natural-language query.
@@ -89,7 +88,9 @@ class SearchService:
                 query_vector = vectors[0]
             except Exception as exc:
                 raise SearchError(f"Failed to embed query for image search: {exc}") from exc
-            results = self._run_search(query_vector, fetch_k, file_type_filter, self._image_vector_store)
+            results = self._run_search(
+                query_vector, fetch_k, file_type_filter, self._image_vector_store
+            )
             return self._apply_path_filter(results, path_prefix, top_k)
 
         # No type filter: search both text and image stores, merge with RRF
@@ -100,7 +101,9 @@ class SearchService:
             except Exception as exc:
                 raise SearchError(f"Failed to embed query: {exc}") from exc
             text_results = self._run_search(text_vectors[0], fetch_k, None, self._vector_store)
-            image_results = self._run_search(image_vectors[0], fetch_k, None, self._image_vector_store)
+            image_results = self._run_search(
+                image_vectors[0], fetch_k, None, self._image_vector_store
+            )
             results = self._merge_rrf(text_results, image_results, fetch_k)
             return self._apply_path_filter(results, path_prefix, top_k)
 
@@ -118,8 +121,8 @@ class SearchService:
         self,
         image_path: Path,
         top_k: int = 10,
-        file_type_filter: Optional[FileType] = None,
-        path_prefix: Optional[Path] = None,
+        file_type_filter: FileType | None = None,
+        path_prefix: Path | None = None,
     ) -> list[SearchResult]:
         """
         Search the index using an image as the query.
@@ -143,7 +146,9 @@ class SearchService:
             raise SearchError(f"Failed to embed query image: {exc}") from exc
 
         fetch_k = top_k * _PATH_FILTER_FETCH_MULTIPLIER if path_prefix is not None else top_k
-        store = self._image_vector_store if self._image_vector_store is not None else self._vector_store
+        store = (
+            self._image_vector_store if self._image_vector_store is not None else self._vector_store
+        )
         results = self._run_search(query_vector, fetch_k, file_type_filter, store)
         return self._apply_path_filter(results, path_prefix, top_k)
 
@@ -154,7 +159,7 @@ class SearchService:
     def _apply_path_filter(
         self,
         results: list[SearchResult],
-        path_prefix: Optional[Path],
+        path_prefix: Path | None,
         top_k: int,
     ) -> list[SearchResult]:
         """If path_prefix is set, keep only results under that path; then return first top_k."""
@@ -218,8 +223,8 @@ class SearchService:
         self,
         query_vector: list[float],
         top_k: int,
-        file_type_filter: Optional[FileType],
-        vector_store: Optional[VectorStore] = None,
+        file_type_filter: FileType | None,
+        vector_store: VectorStore | None = None,
     ) -> list[SearchResult]:
         """Execute vector search and resolve results to domain objects."""
         store = vector_store if vector_store is not None else self._vector_store

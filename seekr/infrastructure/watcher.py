@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any
 
 from seekr.domain.exceptions import WatcherError
 from seekr.domain.interfaces import FileWatcher
@@ -30,8 +31,8 @@ class WatchdogFileWatcher(FileWatcher):
     """
 
     def __init__(self) -> None:
-        self._observer: Optional[object] = None
-        self._handlers: list[object] = []
+        self._observer: Any = None
+        self._handlers: list[Any] = []
 
     def start(
         self,
@@ -50,12 +51,10 @@ class WatchdogFileWatcher(FileWatcher):
             on_deleted:  Callback invoked when a file is deleted.
         """
         try:
-            from watchdog.observers import Observer  # noqa: PLC0415
-            from watchdog.events import FileSystemEventHandler  # noqa: PLC0415
+            from watchdog.events import FileSystemEventHandler
+            from watchdog.observers import Observer
         except ImportError as exc:
-            raise WatcherError(
-                "watchdog is not installed. Run: pip install watchdog"
-            ) from exc
+            raise WatcherError("watchdog is not installed. Run: pip install watchdog") from exc
 
         class _Handler(FileSystemEventHandler):
             def __init__(self_handler) -> None:
@@ -70,28 +69,28 @@ class WatchdogFileWatcher(FileWatcher):
                 self_handler._last_event[path] = now
                 return True
 
-            def on_created(self_handler, event) -> None:
+            def on_created(self_handler, event: Any) -> None:
                 if event.is_directory:
                     return
                 p = Path(event.src_path)
                 if self_handler._should_process(str(p)):
                     on_created(p)
 
-            def on_modified(self_handler, event) -> None:
+            def on_modified(self_handler, event: Any) -> None:
                 if event.is_directory:
                     return
                 p = Path(event.src_path)
                 if self_handler._should_process(str(p)):
                     on_modified(p)
 
-            def on_deleted(self_handler, event) -> None:
+            def on_deleted(self_handler, event: Any) -> None:
                 if event.is_directory:
                     return
                 p = Path(event.src_path)
                 if self_handler._should_process(str(p)):
                     on_deleted(p)
 
-            def on_moved(self_handler, event) -> None:
+            def on_moved(self_handler, event: Any) -> None:
                 if event.is_directory:
                     return
                 # Treat move as delete-old + create-new

@@ -10,12 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from pathlib import Path
-from typing import Optional
 
 
 class FileType(Enum):
     """Supported file types for indexing."""
+
     TEXT = auto()
     IMAGE = auto()
     CODE = auto()
@@ -25,6 +24,7 @@ class FileType(Enum):
 
 class IndexStatus(Enum):
     """Status of an indexing operation for a file record."""
+
     PENDING = "pending"
     INDEXED = "indexed"
     FAILED = "failed"
@@ -34,6 +34,7 @@ class IndexStatus(Enum):
 
 class TaskStatus(Enum):
     """Status of a background indexing task in the queue."""
+
     PENDING = "pending"
     PROCESSING = "processing"
     DONE = "done"
@@ -48,6 +49,7 @@ class FileChunk:
     Large files are split into overlapping chunks so that
     embeddings capture fine-grained semantic regions.
     """
+
     file_path: str
     chunk_index: int
     content: str
@@ -68,6 +70,7 @@ class FileRecord:
 
     Stored in SQLite; the vector store references records by chunk_id.
     """
+
     path: str
     sha256: str
     file_type: FileType
@@ -76,7 +79,7 @@ class FileRecord:
     indexed_at: datetime
     chunk_count: int
     status: IndexStatus = IndexStatus.INDEXED
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 @dataclass
@@ -86,31 +89,33 @@ class SearchResult:
 
     Includes the source chunk and its similarity score.
     """
+
     chunk_id: str
     file_path: str
     chunk_index: int
-    score: float                    # cosine similarity [0, 1]
-    snippet: str                    # excerpt of the matched chunk
+    score: float  # cosine similarity [0, 1]
+    snippet: str  # excerpt of the matched chunk
     file_type: FileType
-    modified_at: Optional[datetime] = None
-
+    modified_at: datetime | None = None
 
 
 @dataclass
 class IndexStats:
     """Aggregate statistics about the current index state."""
+
     total_files: int
     total_chunks: int
     text_files: int
     image_files: int
     index_size_bytes: int
-    last_updated: Optional[datetime]
+    last_updated: datetime | None
     watch_paths: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class IndexTask:
     """A single task in the indexing queue."""
+
     id: int
     file_path: str
     file_hash: str
@@ -122,6 +127,7 @@ class IndexTask:
 @dataclass
 class QueueStats:
     """Progress statistics for the background indexing queue."""
+
     total: int
     completed: int
     processing: int
@@ -130,7 +136,7 @@ class QueueStats:
 
     @property
     def progress_pct(self) -> float:
-        """Progress as a percentage (0–100)."""
+        """Progress as a percentage (0-100)."""
         if self.total == 0:
             return 0.0
         return 100.0 * self.completed / self.total

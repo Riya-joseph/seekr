@@ -7,38 +7,30 @@ run fast with no real files, models, or databases.
 
 from __future__ import annotations
 
-import hashlib
-import tempfile
-from datetime import datetime, timezone
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from seekr.application.index_service import IndexService
-from seekr.domain.exceptions import IndexingError
 from seekr.domain.entities import (
     FileChunk,
     FileRecord,
     FileType,
     IndexStats,
-    IndexStatus,
-    IndexTask,
-    QueueStats,
 )
+from seekr.domain.exceptions import IndexingError
 from seekr.domain.interfaces import (
     EmbeddingModel,
     FileParser,
-    IndexQueue,
     MetadataStore,
     VectorStore,
 )
 
-
 # ---------------------------------------------------------------------------
 # Stubs
 # ---------------------------------------------------------------------------
+
 
 class _StubEmbedder(EmbeddingModel):
     @property
@@ -90,7 +82,7 @@ class _InMemoryMetadataStore(MetadataStore):
     def upsert(self, record: FileRecord) -> None:
         self._records[record.path] = record
 
-    def get(self, path: str) -> Optional[FileRecord]:
+    def get(self, path: str) -> FileRecord | None:
         return self._records.get(path)
 
     def delete(self, path: str) -> None:
@@ -140,9 +132,9 @@ class _StubParser(FileParser):
 
 
 def _make_service(
-    parsers: Optional[list[FileParser]] = None,
-    meta: Optional[MetadataStore] = None,
-    vec: Optional[VectorStore] = None,
+    parsers: list[FileParser] | None = None,
+    meta: MetadataStore | None = None,
+    vec: VectorStore | None = None,
 ) -> tuple[IndexService, _InMemoryMetadataStore, _StubVectorStore]:
     metadata = meta or _InMemoryMetadataStore()
     vector = vec or _StubVectorStore()
@@ -160,12 +152,13 @@ def _make_service(
 # index_path
 # ---------------------------------------------------------------------------
 
+
 class TestIndexPath:
     def test_indexes_supported_files(self, tmp_path: Path) -> None:
         f = tmp_path / "doc.txt"
         f.write_text("hello world", encoding="utf-8")
 
-        svc, meta, _ = _make_service()
+        svc, _meta, _ = _make_service()
         counts = svc.index_path(tmp_path)
         assert counts.get("indexed", 0) >= 1
 
@@ -173,7 +166,7 @@ class TestIndexPath:
         f = tmp_path / "doc.txt"
         f.write_text("hello world", encoding="utf-8")
 
-        svc, meta, _ = _make_service()
+        svc, _meta, _ = _make_service()
         svc.index_path(tmp_path)
         counts2 = svc.index_path(tmp_path)
         assert counts2.get("skipped", 0) >= 1
@@ -188,7 +181,7 @@ class TestIndexPath:
         f.write_text("data", encoding="utf-8")
 
         svc, meta, _ = _make_service(parsers=[_StubParser(".txt")])
-        counts = svc.index_path(tmp_path)
+        svc.index_path(tmp_path)
         # No .txt file present → nothing indexed
         assert meta.all_records() == []
 
@@ -197,12 +190,13 @@ class TestIndexPath:
 # remove_file
 # ---------------------------------------------------------------------------
 
+
 class TestRemoveFile:
     def test_removes_record_and_vectors(self, tmp_path: Path) -> None:
         f = tmp_path / "doc.txt"
         f.write_text("hello world", encoding="utf-8")
 
-        svc, meta, vec = _make_service()
+        svc, meta, _vec = _make_service()
         svc.index_path(tmp_path)
         assert meta.get(str(f)) is not None
 
@@ -218,6 +212,7 @@ class TestRemoveFile:
 # ---------------------------------------------------------------------------
 # dry_run
 # ---------------------------------------------------------------------------
+
 
 class TestDryRun:
     def test_dry_run_new_files_appear_in_to_index(self, tmp_path: Path) -> None:
@@ -273,6 +268,7 @@ class TestDryRun:
 # ---------------------------------------------------------------------------
 # prune_path
 # ---------------------------------------------------------------------------
+
 
 class TestPrunePath:
     def test_prune_removes_all_files_under_root(self, tmp_path: Path) -> None:

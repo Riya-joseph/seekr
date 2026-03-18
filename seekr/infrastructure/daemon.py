@@ -23,7 +23,6 @@ import os
 import signal
 import sys
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +32,7 @@ IS_WINDOWS = sys.platform == "win32"
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
 
 def _pid_file(data_dir: Path) -> Path:
     return data_dir / "watch.pid"
@@ -45,11 +45,12 @@ def _log_file(data_dir: Path) -> Path:
 def _process_exists(pid: int) -> bool:
     """Cross-platform check: is the process with this PID alive?"""
     if IS_WINDOWS:
-        import ctypes  # noqa: PLC0415
+        import ctypes
+
         # PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)  # type: ignore[attr-defined]
         if handle:
-            ctypes.windll.kernel32.CloseHandle(handle)
+            ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
             return True
         return False
     else:
@@ -66,7 +67,8 @@ def _process_exists(pid: int) -> bool:
 # Public API
 # ------------------------------------------------------------------
 
-def is_running(data_dir: Path) -> tuple[bool, Optional[int]]:
+
+def is_running(data_dir: Path) -> tuple[bool, int | None]:
     """
     Return (running, pid).
 
@@ -96,7 +98,8 @@ def read_watched_paths(data_dir: Path) -> list[str]:
         return []
     try:
         info = json.loads(pid_path.read_text())
-        return info.get("paths", [])
+        paths: list[str] = info.get("paths", [])
+        return paths
     except Exception:
         return []
 
@@ -113,7 +116,8 @@ def stop_daemon(data_dir: Path) -> tuple[bool, str]:
         return False, "No running seekr watcher found."
     try:
         if IS_WINDOWS:
-            import subprocess  # noqa: PLC0415
+            import subprocess
+
             subprocess.call(
                 ["taskkill", "/F", "/PID", str(pid)],
                 stdout=subprocess.DEVNULL,
@@ -161,6 +165,7 @@ def daemonize(
 # Platform implementations
 # ------------------------------------------------------------------
 
+
 def _daemonize_posix(data_dir: Path, watched_paths: list[str]) -> None:
     log_path = _log_file(data_dir)
     pid_path = _pid_file(data_dir)
@@ -187,7 +192,7 @@ def _daemonize_posix(data_dir: Path, watched_paths: list[str]) -> None:
     os.chdir("/")
     os.umask(0)
 
-    with open(os.devnull, "r") as devnull:
+    with open(os.devnull) as devnull:
         os.dup2(devnull.fileno(), sys.stdin.fileno())
 
     log_fd = open(log_path, "a", buffering=1)  # line-buffered
@@ -198,7 +203,8 @@ def _daemonize_posix(data_dir: Path, watched_paths: list[str]) -> None:
     pid_info = {"pid": os.getpid(), "paths": watched_paths}
     pid_path.write_text(json.dumps(pid_info))
 
-    import atexit  # noqa: PLC0415
+    import atexit
+
     atexit.register(lambda: pid_path.unlink(missing_ok=True))
 
 
@@ -213,7 +219,7 @@ def _daemonize_windows(
     The parent calls sys.exit(0) after spawning; the child is launched with
     the hidden --_worker flag so it skips this daemonize block entirely.
     """
-    import subprocess  # noqa: PLC0415
+    import subprocess
 
     log_path = _log_file(data_dir)
     pid_path = _pid_file(data_dir)
@@ -225,21 +231,19 @@ def _daemonize_windows(
     if verbose:
         cmd.append("--verbose")
 
-    DETACHED_PROCESS = 0x00000008        # noqa: N806
-    CREATE_NEW_PROCESS_GROUP = 0x00000200  # noqa: N806
-    CREATE_NO_WINDOW = 0x08000000          # noqa: N806
+    DETACHED_PROCESS = 0x00000008
+    CREATE_NEW_PROCESS_GROUP = 0x00000200
+    CREATE_NO_WINDOW = 0x08000000
 
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_file = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
+    log_file = open(log_path, "a", encoding="utf-8")
     try:
         proc = subprocess.Popen(
             cmd,
             stdout=log_file,
             stderr=log_file,
             stdin=subprocess.DEVNULL,
-            creationflags=(
-                DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
-            ),
+            creationflags=(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW),
             close_fds=True,
         )
     finally:
