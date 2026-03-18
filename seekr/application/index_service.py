@@ -313,11 +313,10 @@ class IndexService:
             if self._metadata_store.get(str(root)) is not None:
                 to_remove.append(root)
         else:
-            norm_root = str(root).rstrip("/") + "/"
             for record in self._metadata_store.all_records():
-                p = record.path
-                if p == str(root) or p.startswith(norm_root):
-                    to_remove.append(Path(p))
+                p = Path(record.path)
+                if p == root or p.is_relative_to(root):
+                    to_remove.append(p)
         for path in to_remove:
             self.remove_file(path, persist=False)
         self._vector_store.persist()
